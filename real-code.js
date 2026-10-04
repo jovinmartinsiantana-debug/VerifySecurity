@@ -49,7 +49,7 @@ function saveBlocked() {
 const jid = "0@s.whatsapp.net";
 const vm = require('vm');
 const os = require('os');
-const { tokenBot, ownerID } = require("./settings/config");
+const { tokenBot, ownerID } = require("./config.js");
 const adminFile = './database/adminuser.json';
 const FormData = require("form-data");
 const https = require("https");
@@ -1461,4 +1461,4 @@ async function _startBot() {
   bot.launch();
   process.once('SIGINT', () => bot.stop('SIGINT'));
   process.once('SIGTERM', () => bot.stop('SIGTERM'));
-      }
+    }
