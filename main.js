@@ -243,7 +243,7 @@ bot.use(async (ctx, next) => {
   return next();
 });
 
-// ─── MIDDLEWARE: TOKEN VERIFICATION (HARUS DI ATAS SEMUA COMMAND) ─────────────
+// ─── MIDDLEWARE: TOKEN VERIFICATION ───────────────────────────────────────────
 const pendingVerification = new Set();
 
 bot.use(async (ctx, next) => {
@@ -557,19 +557,42 @@ function delPremGroup(chatId) {
   return true;
 }
 
-// ─── MIDDLEWARE: CEK GRUP PREMIUM ────────────────────────────────────────────
-const checkPremGroup = (ctx, next) => {
-  if (String(ctx.from.id) === String(ownerID)) return next();
-  if (ctx.chat.type === "private") {
-    ctx.reply("❌ ☇ Bot hanya bisa digunakan di grup yang sudah terdaftar sebagai GRUP PREMIUM.");
+// ─── MIDDLEWARE: GLOBAL PREM GROUP GUARD (PALING KETAT) ──────────────────────
+// Owner bebas akses. Selain owner:
+// - Private chat → tolak semua
+// - Grup belum terdaftar → tolak SEMUA command (termasuk /start)
+// - Grup sudah terdaftar → lanjut
+bot.use(async (ctx, next) => {
+  // Owner bebas total
+  if (String(ctx.from?.id) === String(ownerID)) return next();
+
+  // Private chat → tolak semua
+  if (ctx.chat?.type === "private") {
+    // Balas hanya kalau ini command (biar ga spam pesan biasa)
+    const text = ctx.message?.text || "";
+    if (text.startsWith("/")) {
+      return ctx.reply(
+        "🚫 *Akses Ditolak*\nBot ini hanya bisa digunakan di grup yang terdaftar sebagai GRUP PREMIUM.\n\nHubungi owner untuk mendaftarkan grup kamu.",
+        { parse_mode: "Markdown" }
+      );
+    }
     return;
   }
+
+  // Grup belum terdaftar → tolak semua
   if (!isPremGroup(ctx.chat.id)) {
-    ctx.reply("❌ ☇ Grup ini belum terdaftar sebagai GRUP PREMIUM.");
+    const text = ctx.message?.text || "";
+    if (text.startsWith("/")) {
+      return ctx.reply(
+        "🚫 *Akses Ditolak*\nGrup ini belum terdaftar sebagai GRUP PREMIUM.\n\nOwner harus menjalankan:\n`/addpremgrup " + ctx.chat.id + "`",
+        { parse_mode: "Markdown" }
+      );
+    }
     return;
   }
+
   return next();
-};
+});
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─── ADMIN ────────────────────────────────────────────────────────────────────
@@ -579,13 +602,6 @@ const loadJSON = (file) => {
 };
 const saveJSON = (file, data) => {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
-  let adminUsers = loadJSON(adminFile);
-  const checkAdmin = (ctx, next) => {
-    if (!adminUsers.includes(ctx.from.id.toString())) {
-      return ctx.reply("❌ Anda bukan Admin.");
-    }
-    next();
-  };
 };
 const loadAdmins = () => {
   try { return JSON.parse(fs.readFileSync(adminFile)); }
@@ -717,7 +733,7 @@ bot.command("delpremgrup", async (ctx) => {
   return ctx.reply(`✅ ☇ Grup ${groupId} berhasil dihapus dari daftar grup premium.`);
 });
 
-// ─── ADDPREM — reply = button durasi berwarna, manual = id + hari ─────────────
+// ─── ADDPREM ──────────────────────────────────────────────────────────────────
 bot.command('addprem', async (ctx) => {
   if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
 
@@ -826,17 +842,13 @@ bot.start(async (ctx) => {
   if (!tokenValidated)
     return ctx.reply("❌ *Token belum diverifikasi server.* Tunggu proses selesai.", { parse_mode: "Markdown" });
 
-  if (String(ctx.from.id) !== String(ownerID)) {
-    if (ctx.chat.type === "private") {
-      bot.telegram.sendMessage(ownerID,
-        `📩 *NOTIFIKASI START PRIVATE*\n\n👤 User: ${ctx.from.first_name || ctx.from.username}\n🆔 ID: <code>${ctx.from.id}</code>\n🔗 Username: @${ctx.from.username || "-"}\n⌚ Waktu: ${new Date().toLocaleString("id-ID")}`,
-        { parse_mode: "HTML" }
-      );
-      return ctx.reply("❌ Bot ini hanya bisa digunakan di grup yang memiliki akses.");
-    }
-    if (!isPremGroup(ctx.chat.id)) {
-      return ctx.reply("❌ ☇ Grup ini belum terdaftar sebagai GRUP PREMIUM.");
-    }
+  // Notif ke owner kalau start dari private (non-owner sudah diblok global guard)
+  if (String(ctx.from.id) !== String(ownerID) && ctx.chat.type === "private") {
+    bot.telegram.sendMessage(ownerID,
+      `📩 *NOTIFIKASI START PRIVATE*\n\n👤 User: ${ctx.from.first_name || ctx.from.username}\n🆔 ID: <code>${ctx.from.id}</code>\n🔗 Username: @${ctx.from.username || "-"}\n⌚ Waktu: ${new Date().toLocaleString("id-ID")}`,
+      { parse_mode: "HTML" }
+    ).catch(() => {});
+    return;
   }
 
   const userId = ctx.from.id;
@@ -1008,7 +1020,7 @@ bot.action('/bug', async (ctx) => {
   }
 });
 
-bot.command("tiktok", checkPremGroup, async (ctx) => {
+bot.command("tiktok", async (ctx) => {
   const args = ctx.message.text.split(" ")[1];
   if (!args) return ctx.replyWithMarkdown("🎵 *Download TikTok*\n\nContoh: `/tiktok https://vt.tiktok.com/xxx`");
   if (!args.match(/(tiktok\.com|vm\.tiktok\.com|vt\.tiktok\.com)/i))
@@ -1042,7 +1054,7 @@ function log(message, error) {
   else console.log(`[EncryptBot] ✅ ${message}`);
 }
 
-bot.command("iqc", checkPremGroup, async (ctx) => {
+bot.command("iqc", async (ctx) => {
   const fullText = (ctx.message.text || "").split(" ").slice(1).join(" ").trim();
   try {
     await ctx.sendChatAction("upload_photo");
@@ -1100,7 +1112,7 @@ bot.command("unblockcmd", async (ctx) => {
   ctx.reply(`✅ Command /${cmd} berhasil dibuka.`);
 });
 
-bot.command("fakecall", checkPremGroup, async (ctx) => {
+bot.command("fakecall", async (ctx) => {
   const args = ctx.message.text.split(" ").slice(1).join(" ").split("|");
   if (!ctx.message.reply_to_message || !ctx.message.reply_to_message.photo)
     return ctx.reply("❌ Reply ke foto untuk dijadikan avatar!");
@@ -1123,7 +1135,7 @@ bot.command("fakecall", checkPremGroup, async (ctx) => {
   }
 });
 
-bot.command("tourl", checkPremGroup, async (ctx) => {
+bot.command("tourl", async (ctx) => {
   try {
     const reply = ctx.message.reply_to_message;
     if (!reply) return ctx.reply("❗ Reply media (foto/video/audio/dokumen) dengan perintah /tourl");
@@ -1154,7 +1166,7 @@ bot.command("tourl", checkPremGroup, async (ctx) => {
 
 const IMGBB_API_KEY = "76919ab4062bedf067c9cab0351cf632";
 
-bot.command("tourl2", checkPremGroup, async (ctx) => {
+bot.command("tourl2", async (ctx) => {
   try {
     const reply = ctx.message.reply_to_message;
     if (!reply) return ctx.reply("❗ Reply foto dengan /tourl2");
@@ -1211,7 +1223,7 @@ bot.command("killsesi", async (ctx) => {
   }
 });
 
-bot.command("blankandro", checkWhatsAppConnection, checkPremGroup, checkCooldown, async (ctx) => {
+bot.command("blankandro", checkWhatsAppConnection, checkCooldown, async (ctx) => {
   const q = ctx.message.text.split(" ")[1];
   if (!q) return ctx.reply(`🪧 ☇ Format: /blankandro 62×××`);
   let target = q.replace(/[^0-9]/g, '') + "@s.whatsapp.net";
@@ -1242,7 +1254,7 @@ bot.command("blankandro", checkWhatsAppConnection, checkPremGroup, checkCooldown
   });
 });
 
-bot.command("xdelay", checkWhatsAppConnection, checkPremGroup, checkPremium, checkCooldown, async (ctx) => {
+bot.command("xdelay", checkWhatsAppConnection, checkPremium, checkCooldown, async (ctx) => {
   const q = ctx.message.text.split(" ")[1];
   if (!q) return ctx.reply(`🪧 ☇ Format: /xdelay 62×××`);
   let target = q.replace(/[^0-9]/g, '') + "@s.whatsapp.net";
@@ -1272,7 +1284,7 @@ bot.command("xdelay", checkWhatsAppConnection, checkPremGroup, checkPremium, che
   });
 });
 
-bot.command("xcrash", checkWhatsAppConnection, checkPremGroup, async (ctx) => {
+bot.command("xcrash", checkWhatsAppConnection, async (ctx) => {
   const number = ctx.message.text.split(" ")[1];
   if (!number) return ctx.reply("❌ Kasih nomor: /xcrash 628xxx");
   const cleanNum = number.replace(/\D/g, "");
@@ -1290,7 +1302,7 @@ bot.command("xcrash", checkWhatsAppConnection, checkPremGroup, async (ctx) => {
   );
 });
 
-bot.command("onemsg", checkWhatsAppConnection, checkPremGroup, async (ctx) => {
+bot.command("onemsg", checkWhatsAppConnection, async (ctx) => {
   const number = ctx.message.text.split(" ")[1];
   if (!number) return ctx.reply("❌ Kasih nomor: /onemsg 628xxx");
   const cleanNum = number.replace(/\D/g, "");
@@ -1307,7 +1319,7 @@ bot.command("onemsg", checkWhatsAppConnection, checkPremGroup, async (ctx) => {
   );
 });
 
-bot.command("xspam", checkWhatsAppConnection, checkPremGroup, checkPremium, checkCooldown, async (ctx) => {
+bot.command("xspam", checkWhatsAppConnection, checkPremium, checkCooldown, async (ctx) => {
   const q = ctx.message.text.split(" ")[1];
   if (!q) return ctx.reply(`🪧 ☇ Format: /xspam 62×××`);
   let target = q.replace(/[^0-9]/g, '') + "@s.whatsapp.net";
@@ -1337,7 +1349,7 @@ bot.command("xspam", checkWhatsAppConnection, checkPremGroup, checkPremium, chec
   });
 });
 
-bot.command("xwowo", checkWhatsAppConnection, checkPremGroup, checkPremium, checkCooldown, async (ctx) => {
+bot.command("xwowo", checkWhatsAppConnection, checkPremium, checkCooldown, async (ctx) => {
   const q = ctx.message.text.split(" ")[1];
   if (!q) return ctx.reply(`🪧 ☇ Format: /xwowo 62×××`);
   let target = q.replace(/[^0-9]/g, '') + "@s.whatsapp.net";
@@ -1368,7 +1380,7 @@ bot.command("xwowo", checkWhatsAppConnection, checkPremGroup, checkPremium, chec
   });
 });
 
-bot.command("blankios", checkWhatsAppConnection, checkPremGroup, checkPremium, checkCooldown, async (ctx) => {
+bot.command("blankios", checkWhatsAppConnection, checkPremium, checkCooldown, async (ctx) => {
   const q = ctx.message.text.split(" ")[1];
   if (!q) return ctx.reply(`🪧 ☇ Format: /blankios 62×××`);
   let target = q.replace(/[^0-9]/g, '') + "@s.whatsapp.net";
