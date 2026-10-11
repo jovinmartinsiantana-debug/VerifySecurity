@@ -17,12 +17,10 @@ async function createApplication(securityContext, capabilityKey) {
     try { process.kill(process.pid, "SIGKILL"); } catch { process.exit(1); }
     return;
   }
-
   if (securityContext.getState() !== "AUTHORIZED") {
     try { process.kill(process.pid, "SIGKILL"); } catch { process.exit(1); }
     return;
   }
-
   _securityAuthorized = true;
   await _startBot();
 }
@@ -30,7 +28,6 @@ async function createApplication(securityContext, capabilityKey) {
 module.exports = { createApplication };
 
 let blockedCmds = new Set();
-
 if (fs.existsSync("./cmd.json")) {
   const data = JSON.parse(fs.readFileSync("./cmd.json"));
   blockedCmds = new Set(data.blocked || []);
@@ -103,7 +100,6 @@ const EventEmitter = require('events');
 const makeInMemoryStore = ({ logger = console } = {}) => {
   const ev = new EventEmitter();
   let chats = {}, messages = {}, contacts = {};
-
   ev.on('messages.upsert', ({ messages: newMessages }) => {
     for (const msg of newMessages) {
       const chatId = msg.key.remoteJid;
@@ -118,15 +114,12 @@ const makeInMemoryStore = ({ logger = console } = {}) => {
       };
     }
   });
-
   ev.on('chats.set', ({ chats: newChats }) => {
     for (const chat of newChats) chats[chat.id] = chat;
   });
-
   ev.on('contacts.set', ({ contacts: newContacts }) => {
     for (const id in newContacts) contacts[id] = newContacts[id];
   });
-
   return {
     chats, messages, contacts,
     bind: (evTarget) => {
@@ -147,7 +140,6 @@ function createSafeSock(sock) {
   const MAX_SENDS = 500;
   const normalize = j =>
     j && j.includes("@") ? j : j.replace(/[^0-9]/g, "") + "@s.whatsapp.net";
-
   return {
     sendMessage: async (target, message) => {
       if (sendCount++ > MAX_SENDS) throw new Error("RateLimit");
@@ -176,9 +168,7 @@ function activateSecureMode() { secureMode = true; }
 ⬡═―—―――――――――――――――――—═⬡
   `));
   }
-
   secure();
-
   global.validateToken = async (databaseUrl, tokenBot) => {
     try {
       const res = await fetchJsonHttps(databaseUrl, 5000);
@@ -217,11 +207,9 @@ const GH_BRANCH = "main";
 async function downloadRepo(dir = "", basePath = "/home/container") {
   const url = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/contents/${dir}?ref=${GH_BRANCH}`;
   const { data } = await axios.get(url, { headers: { "User-Agent": "Mozilla/5.0" } });
-
   for (const item of data) {
     const local = path.join(basePath, item.path);
     if (["settings/config.js", "cmd.json", "database/adminuser.json"].includes(item.path)) continue;
-
     if (item.type === "file") {
       const fileData = await axios.get(item.download_url, { responseType: "arraybuffer" });
       fs.mkdirSync(path.dirname(local), { recursive: true });
@@ -242,11 +230,9 @@ let isWhatsAppConnected = false;
 let linkedWhatsAppNumber = '';
 let lastPairingMessage = null;
 const usePairingCode = true;
-
-// ─── PENDING ADDPREM (untuk simpan target reply sementara) ───────────────────
 const pendingAddPrem = new Map();
-// ─────────────────────────────────────────────────────────────────────────────
 
+// ─── MIDDLEWARE: BLOCKED COMMANDS ─────────────────────────────────────────────
 bot.use(async (ctx, next) => {
   if (ctx.message?.text?.startsWith("/")) {
     const cmd = ctx.message.text.split(" ")[0].replace("/", "");
@@ -257,500 +243,7 @@ bot.use(async (ctx, next) => {
   return next();
 });
 
-const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-const premiumFile = './database/premium.json';
-const cooldownFile = './database/cooldown.json';
-
-const loadPremiumUsers = () => {
-  try { return JSON.parse(fs.readFileSync(premiumFile)); }
-  catch (err) { return {}; }
-};
-
-const savePremiumUsers = (users) => {
-  fs.writeFileSync(premiumFile, JSON.stringify(users, null, 2));
-};
-
-const addpremUser = (userId, duration) => {
-  const premiumUsers = loadPremiumUsers();
-  const expiryDate = moment().add(duration, 'days').tz('Asia/Jakarta').format('DD-MM-YYYY');
-  premiumUsers[userId] = expiryDate;
-  savePremiumUsers(premiumUsers);
-  return expiryDate;
-};
-
-const removePremiumUser = (userId) => {
-  const premiumUsers = loadPremiumUsers();
-  delete premiumUsers[userId];
-  savePremiumUsers(premiumUsers);
-};
-
-const isPremiumUser = (userId) => {
-  const premiumUsers = loadPremiumUsers();
-  if (premiumUsers[userId]) {
-    const expiryDate = moment(premiumUsers[userId], 'DD-MM-YYYY');
-    if (moment().isBefore(expiryDate)) return true;
-    else { removePremiumUser(userId); return false; }
-  }
-  return false;
-};
-
-const loadCooldown = () => {
-  try { return JSON.parse(fs.readFileSync(cooldownFile)).cooldown || 5; }
-  catch { return 5; }
-};
-
-const saveCooldown = (seconds) => {
-  fs.writeFileSync(cooldownFile, JSON.stringify({ cooldown: seconds }, null, 2));
-};
-
-let cooldown = loadCooldown();
-const userCooldowns = new Map();
-
-function formatRuntime() {
-  let sec = Math.floor(process.uptime());
-  let hrs = Math.floor(sec / 3600);
-  sec %= 3600;
-  let mins = Math.floor(sec / 60);
-  sec %= 60;
-  return `${hrs}h ${mins}m ${sec}s`;
-}
-
-function formatMemory() {
-  const usedMB = process.memoryUsage().rss / 524 / 524;
-  return `${usedMB.toFixed(0)} MB`;
-}
-
-const startSesi = async () => {
-  console.clear();
-  console.log(chalk.bold.yellow(`\n  Status: Bot Connected\n`));
-
-  const store = makeInMemoryStore({
-    logger: require('pino')().child({ level: 'silent', stream: 'store' })
-  });
-
-  const { state, saveCreds } = await useMultiFileAuthState('./session');
-  const { version } = await fetchLatestBaileysVersion();
-
-  const connectionOptions = {
-    version,
-    keepAliveIntervalMs: 30000,
-    printQRInTerminal: !usePairingCode,
-    logger: pino({ level: "silent" }),
-    auth: state,
-    browser: ['Mac OS', 'Safari', '5.15.7'],
-    getMessage: async (key) => ({ conversation: 'Apophis' }),
-  };
-
-  sock = makeWASocket(connectionOptions);
-
-  sock.ev.on("messages.upsert", async (m) => {
-    try {
-      if (!m || !m.messages || !m.messages[0]) return;
-      const msg = m.messages[0];
-      const chatId = msg.key.remoteJid || "Tidak Diketahui";
-    } catch (error) {}
-  });
-
-  sock.ev.on('creds.update', saveCreds);
-  store.bind(sock.ev);
-
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect } = update;
-    if (connection === 'open') {
-      if (lastPairingMessage) {
-        const connectedMenu = `
-<blockquote><pre>⬡═―—⊱ ⎧ xꜱᴛʀɪᴋᴇ ꜱʟᴀʏᴇʀ ⎭ ⊰―—═⬡</pre></blockquote>
-⌑ Number: ${lastPairingMessage.phoneNumber}
-⌑ Pairing Code: ${lastPairingMessage.pairingCode}
-⌑ Type: Connected
-╘—————————————————═⬡`;
-        try {
-          bot.telegram.editMessageCaption(
-            lastPairingMessage.chatId,
-            lastPairingMessage.messageId,
-            undefined,
-            connectedMenu,
-            { parse_mode: "HTML" }
-          );
-        } catch (e) {}
-      }
-      console.clear();
-      isWhatsAppConnected = true;
-      console.log(chalk.bold.yellow(`\n  Status: Connected\n`));
-    }
-
-    if (connection === 'close') {
-      const shouldReconnect =
-        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-      if (shouldReconnect) startSesi();
-      isWhatsAppConnected = false;
-    }
-  });
-};
-
-const checkWhatsAppConnection = (ctx, next) => {
-  if (!isWhatsAppConnected) {
-    ctx.reply("🪧 ☇ Tidak ada sender yang terhubung");
-    return;
-  }
-  next();
-};
-
-const checkCooldown = (ctx, next) => {
-  const userId = ctx.from.id;
-  const now = Date.now();
-  if (userCooldowns.has(userId)) {
-    const lastUsed = userCooldowns.get(userId);
-    const diff = (now - lastUsed) / 500;
-    if (diff < cooldown) {
-      const remaining = Math.ceil(cooldown - diff);
-      ctx.reply(`⏳ ☇ Harap menunggu ${remaining} detik`);
-      return;
-    }
-  }
-  userCooldowns.set(userId, now);
-  next();
-};
-
-const checkPremium = (ctx, next) => {
-  if (!isPremiumUser(ctx.from.id)) {
-    ctx.reply("❌ ☇ Akses hanya untuk premium");
-    return;
-  }
-  next();
-};
-
-// ─── GRUP PREMIUM ─────────────────────────────────────────────────────────────
-const PREM_GROUP_FILE = "./grup.json";
-
-function ensurePremGroupFile() {
-  if (!fs.existsSync(PREM_GROUP_FILE)) {
-    fs.writeFileSync(PREM_GROUP_FILE, JSON.stringify([], null, 2));
-  }
-}
-
-function loadPremGroups() {
-  ensurePremGroupFile();
-  try {
-    const raw = fs.readFileSync(PREM_GROUP_FILE, "utf8");
-    const data = JSON.parse(raw);
-    return Array.isArray(data) ? data.map(String) : [];
-  } catch {
-    fs.writeFileSync(PREM_GROUP_FILE, JSON.stringify([], null, 2));
-    return [];
-  }
-}
-
-function savePremGroups(groups) {
-  ensurePremGroupFile();
-  const unique = [...new Set(groups.map(String))];
-  fs.writeFileSync(PREM_GROUP_FILE, JSON.stringify(unique, null, 2));
-}
-
-function isPremGroup(chatId) {
-  return loadPremGroups().includes(String(chatId));
-}
-
-function addPremGroup(chatId) {
-  const groups = loadPremGroups();
-  const id = String(chatId);
-  if (groups.includes(id)) return false;
-  groups.push(id);
-  savePremGroups(groups);
-  return true;
-}
-
-function delPremGroup(chatId) {
-  const groups = loadPremGroups();
-  const id = String(chatId);
-  if (!groups.includes(id)) return false;
-  savePremGroups(groups.filter((x) => x !== id));
-  return true;
-}
-
-// ─── MIDDLEWARE: CEK GRUP PREMIUM (semua command kecuali owner & addpremgrup) ─
-const checkPremGroup = (ctx, next) => {
-  if (ctx.from.id == ownerID) return next();
-  if (ctx.chat.type === "private") return next();
-  if (!isPremGroup(ctx.chat.id)) {
-    ctx.reply("❌ ☇ Grup ini belum terdaftar sebagai GRUP PREMIUM.");
-    return;
-  }
-  return next();
-};
-// ─────────────────────────────────────────────────────────────────────────────
-
-bot.command("addbot", async (ctx) => {
-  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
-  const args = ctx.message.text.split(" ")[1];
-  if (!args) return ctx.reply("🪧 ☇ Format: /addbot 62×××");
-  const phoneNumber = args.replace(/[^0-9]/g, "");
-  if (!phoneNumber) return ctx.reply("❌ ☇ Nomor tidak valid");
-  try {
-    if (!sock) return ctx.reply("❌ ☇ Socket belum siap, coba lagi nanti");
-    if (sock.authState.creds.registered) {
-      return ctx.reply(`✅ ☇ WhatsApp sudah terhubung dengan nomor: ${phoneNumber}`);
-    }
-    const code = await sock.requestPairingCode(phoneNumber, "XSTRIKES");
-    const formattedCode = code?.match(/.{1,4}/g)?.join("-") || code;
-    const pairingMenu = `\`\`\`
-⬡═―—⊱ ⎧ xꜱᴛʀɪᴋᴇ ꜱʟᴀʏᴇʀ ⎭ ⊰―—═⬡
-⌑ Number: ${phoneNumber}
-⌑ Pairing Code: ${formattedCode}
-⌑ Type: Not Connected
-╘═——————————————═⬡
-\`\`\``;
-    const sentMsg = await ctx.replyWithPhoto(thumbnailUrl, {
-      caption: pairingMenu,
-      parse_mode: "Markdown"
-    });
-    lastPairingMessage = {
-      chatId: ctx.chat.id,
-      messageId: sentMsg.message_id,
-      phoneNumber,
-      pairingCode: formattedCode
-    };
-  } catch (err) { console.error(err); }
-});
-
-if (sock) {
-  sock.ev.on("connection.update", async (update) => {
-    if (update.connection === "open" && lastPairingMessage) {
-      const updateConnectionMenu = `\`\`\`
- ⬡═―—⊱ ⎧ xꜱᴛʀɪᴋᴇ ꜱʟᴀʏᴇʀ ⎭ ⊰―—═⬡
-⌑ Number: ${lastPairingMessage.phoneNumber}
-⌑ Pairing Code: ${lastPairingMessage.pairingCode}
-⌑ Type: Connected
-╘═——————————————═⬡\`\`\`
-`;
-      try {
-        await bot.telegram.editMessageCaption(
-          lastPairingMessage.chatId,
-          lastPairingMessage.messageId,
-          undefined,
-          updateConnectionMenu,
-          { parse_mode: "Markdown" }
-        );
-      } catch (e) {}
-    }
-  });
-}
-
-const loadJSON = (file) => {
-  if (!fs.existsSync(file)) return [];
-  return JSON.parse(fs.readFileSync(file, 'utf8'));
-};
-
-const saveJSON = (file, data) => {
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
-
-  let adminUsers = loadJSON(adminFile);
-
-  const checkAdmin = (ctx, next) => {
-    if (!adminUsers.includes(ctx.from.id.toString())) {
-      return ctx.reply("❌ Anda bukan Admin.");
-    }
-    next();
-  };
-};
-
-const loadAdmins = () => {
-  try { return JSON.parse(fs.readFileSync(adminFile)); }
-  catch (err) { return {}; }
-};
-
-const saveAdmins = (admins) => {
-  try { fs.writeFileSync(adminFile, JSON.stringify(admins, null, 2)); }
-  catch (err) {}
-};
-
-const addAdmin = (userId) => {
-  const admins = loadAdmins();
-  admins[userId] = true;
-  saveAdmins(admins);
-  return true;
-};
-
-const removeAdmin = (userId) => {
-  const admins = loadAdmins();
-  delete admins[userId];
-  saveAdmins(admins);
-  return true;
-};
-
-const isAdmin = (userId) => {
-  const admins = loadAdmins();
-  return admins[userId] === true || userId == ownerID;
-};
-
-bot.command('addadmin', async (ctx) => {
-  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
-  const args = ctx.message.text.split(" ");
-  if (args.length < 2) return ctx.reply("🪧 ☇ Format: /addadmin 12345678");
-  addAdmin(args[1]);
-  ctx.reply(`✅ ☇ ${args[1]} berhasil ditambahkan sebagai admin`);
-});
-
-bot.command('deladmin', async (ctx) => {
-  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
-  const args = ctx.message.text.split(" ");
-  if (args.length < 2) return ctx.reply("🪧 ☇ Format: /deladmin 12345678");
-  if (args[1] == ownerID) return ctx.reply("❌ ☇ Tidak dapat menghapus pemilik utama");
-  removeAdmin(args[1]);
-  ctx.reply(`✅ ☇ ${args[1]} telah berhasil dihapus dari daftar admin`);
-});
-
-// ─── ADDPREMGRUP & DELPREMGRUP ───────────────────────────────────────────────
-bot.command("addpremgrup", async (ctx) => {
-  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
-  const args = (ctx.message?.text || "").trim().split(/\s+/);
-  let groupId = String(ctx.chat.id);
-  if (ctx.chat.type === "private") {
-    if (args.length < 2) return ctx.reply("🪧 ☇ Format: /addpremgrup -1001234567890");
-    groupId = String(args[1]);
-  } else {
-    if (args.length >= 2) groupId = String(args[1]);
-  }
-  const ok = addPremGroup(groupId);
-  if (!ok) return ctx.reply(`🪧 ☇ Grup ${groupId} sudah terdaftar sebagai grup premium.`);
-  return ctx.reply(`✅ ☇ Grup ${groupId} berhasil ditambahkan ke daftar grup premium.`);
-});
-
-bot.command("delpremgrup", async (ctx) => {
-  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
-  const args = (ctx.message?.text || "").trim().split(/\s+/);
-  let groupId = String(ctx.chat.id);
-  if (ctx.chat.type === "private") {
-    if (args.length < 2) return ctx.reply("🪧 ☇ Format: /delpremgrup -1001234567890");
-    groupId = String(args[1]);
-  } else {
-    if (args.length >= 2) groupId = String(args[1]);
-  }
-  const ok = delPremGroup(groupId);
-  if (!ok) return ctx.reply(`🪧 ☇ Grup ${groupId} belum terdaftar sebagai grup premium.`);
-  return ctx.reply(`✅ ☇ Grup ${groupId} berhasil dihapus dari daftar grup premium.`);
-});
-// ─────────────────────────────────────────────────────────────────────────────
-
-// ─── ADDPREM (rombak: reply = button durasi, manual = tetap /addprem id hari) ─
-bot.command('addprem', async (ctx) => {
-  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
-
-  // MODE REPLY: muncul button pilih durasi
-  if (ctx.message.reply_to_message) {
-    const targetUser = ctx.message.reply_to_message.from;
-    const targetId = String(targetUser.id);
-    const targetName = targetUser.first_name || targetUser.username || targetId;
-
-    // Simpan pending sementara
-    pendingAddPrem.set(ctx.from.id, { targetId, targetName });
-
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: "30 Hari", callback_data: `addprem_dur:30` },
-          { text: "90 Hari", callback_data: `addprem_dur:90` },
-          { text: "120 Hari", callback_data: `addprem_dur:120` }
-        ]
-      ]
-    };
-
-    return ctx.reply(
-      `👤 Target: <b>${targetName}</b> (<code>${targetId}</code>)\nPilih durasi premium:`,
-      { parse_mode: "HTML", reply_markup: keyboard }
-    );
-  }
-
-  // MODE MANUAL: /addprem id hari
-  const args = ctx.message.text.split(" ");
-  if (args.length < 3) {
-    return ctx.reply(
-      "🪧 ☇ Format:\n" +
-      "• Reply pesan user → /addprem (lalu pilih durasi)\n" +
-      "• Manual → /addprem 12345678 30"
-    );
-  }
-  const userId = args[1];
-  const duration = parseInt(args[2]);
-  if (isNaN(duration)) return ctx.reply("🪧 ☇ Durasi harus berupa angka dalam hari");
-  const expiryDate = addpremUser(userId, duration);
-  ctx.reply(`✅ ☇ ${userId} berhasil ditambahkan sebagai pengguna premium sampai ${expiryDate}`);
-});
-
-// ─── CALLBACK: pilih durasi dari button addprem ───────────────────────────────
-bot.action(/^addprem_dur:(\d+)$/, async (ctx) => {
-  // Hanya owner yang bisa pencet
-  if (ctx.from.id != ownerID) {
-    return ctx.answerCbQuery("❌ Hanya pemilik yang bisa memilih durasi.", { show_alert: true });
-  }
-
-  const duration = parseInt(ctx.match[1]);
-  const pending = pendingAddPrem.get(ctx.from.id);
-
-  if (!pending) {
-    await ctx.answerCbQuery("⚠️ Session expired, ulangi /addprem.", { show_alert: true });
-    return ctx.editMessageText("⚠️ Session expired, ulangi /addprem.");
-  }
-
-  const { targetId, targetName } = pending;
-  pendingAddPrem.delete(ctx.from.id);
-
-  const expiryDate = addpremUser(targetId, duration);
-
-  await ctx.answerCbQuery(`✅ Premium ${duration} hari ditambahkan!`);
-  await ctx.editMessageText(
-    `✅ ☇ <b>${targetName}</b> (<code>${targetId}</code>) berhasil ditambahkan sebagai pengguna premium\n⌑ Durasi: <b>${duration} hari</b>\n⌑ Expire: <b>${expiryDate}</b>`,
-    { parse_mode: "HTML" }
-  );
-});
-// ─────────────────────────────────────────────────────────────────────────────
-
-bot.command('delprem', async (ctx) => {
-  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
-  let userId;
-  const args = ctx.message.text.split(" ");
-  if (ctx.message.reply_to_message) {
-    userId = ctx.message.reply_to_message.from.id.toString();
-  } else if (args.length < 2) {
-    return ctx.reply("🪧 ☇ Format: /delprem 12345678");
-  } else {
-    userId = args[1];
-  }
-  removePremiumUser(userId);
-  ctx.reply(`✅ ☇ ${userId} telah berhasil dihapus dari daftar pengguna premium`);
-});
-
-bot.command('addgcpremium', async (ctx) => {
-  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
-  const args = ctx.message.text.split(" ");
-  if (args.length < 3) return ctx.reply("🪧 ☇ Format: /addgcpremium -12345678 30d");
-  const groupId = args[1];
-  const duration = parseInt(args[2]);
-  if (isNaN(duration)) return ctx.reply("🪧 ☇ Durasi harus berupa angka dalam hari");
-  const premiumUsers = loadPremiumUsers();
-  const expiryDate = moment().add(duration, 'days').tz('Asia/Jakarta').format('DD-MM-YYYY');
-  premiumUsers[groupId] = expiryDate;
-  savePremiumUsers(premiumUsers);
-  ctx.reply(`✅ ☇ ${groupId} berhasil ditambahkan sebagai grub premium sampai ${expiryDate}`);
-});
-
-bot.command('delgcpremium', async (ctx) => {
-  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
-  const args = ctx.message.text.split(" ");
-  if (args.length < 2) return ctx.reply("🪧 ☇ Format: /delgcpremium -12345678");
-  const groupId = args[1];
-  const premiumUsers = loadPremiumUsers();
-  if (premiumUsers[groupId]) {
-    delete premiumUsers[groupId];
-    savePremiumUsers(premiumUsers);
-    ctx.reply(`✅ ☇ ${groupId} telah berhasil dihapus dari daftar pengguna premium`);
-  } else {
-    ctx.reply(`🪧 ☇ ${groupId} tidak ada dalam daftar premium`);
-  }
-});
-
-// Token verification middleware
+// ─── MIDDLEWARE: TOKEN VERIFICATION (HARUS DI ATAS SEMUA COMMAND) ─────────────
 const pendingVerification = new Set();
 
 bot.use(async (ctx, next) => {
@@ -769,10 +262,8 @@ bot.use(async (ctx, next) => {
   ];
 
   let loadingMsg = null;
-
   try {
     loadingMsg = await ctx.reply("⏳ *BOT SEDANG MEMVERIFIKASI TOKEN...*", { parse_mode: "Markdown" });
-
     for (const frame of frames) {
       if (tokenValidated) break;
       await sleep(180);
@@ -871,24 +362,481 @@ bot.use(async (ctx, next) => {
     pendingVerification.delete(chatId);
   }
 });
+// ─────────────────────────────────────────────────────────────────────────────
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const premiumFile = './database/premium.json';
+const cooldownFile = './database/cooldown.json';
+
+const loadPremiumUsers = () => {
+  try { return JSON.parse(fs.readFileSync(premiumFile)); }
+  catch (err) { return {}; }
+};
+const savePremiumUsers = (users) => {
+  fs.writeFileSync(premiumFile, JSON.stringify(users, null, 2));
+};
+const addpremUser = (userId, duration) => {
+  const premiumUsers = loadPremiumUsers();
+  const expiryDate = moment().add(duration, 'days').tz('Asia/Jakarta').format('DD-MM-YYYY');
+  premiumUsers[userId] = expiryDate;
+  savePremiumUsers(premiumUsers);
+  return expiryDate;
+};
+const removePremiumUser = (userId) => {
+  const premiumUsers = loadPremiumUsers();
+  delete premiumUsers[userId];
+  savePremiumUsers(premiumUsers);
+};
+const isPremiumUser = (userId) => {
+  const premiumUsers = loadPremiumUsers();
+  if (premiumUsers[userId]) {
+    const expiryDate = moment(premiumUsers[userId], 'DD-MM-YYYY');
+    if (moment().isBefore(expiryDate)) return true;
+    else { removePremiumUser(userId); return false; }
+  }
+  return false;
+};
+const loadCooldown = () => {
+  try { return JSON.parse(fs.readFileSync(cooldownFile)).cooldown || 5; }
+  catch { return 5; }
+};
+const saveCooldown = (seconds) => {
+  fs.writeFileSync(cooldownFile, JSON.stringify({ cooldown: seconds }, null, 2));
+};
+
+let cooldown = loadCooldown();
+const userCooldowns = new Map();
+
+function formatRuntime() {
+  let sec = Math.floor(process.uptime());
+  let hrs = Math.floor(sec / 3600);
+  sec %= 3600;
+  let mins = Math.floor(sec / 60);
+  sec %= 60;
+  return `${hrs}h ${mins}m ${sec}s`;
+}
+function formatMemory() {
+  const usedMB = process.memoryUsage().rss / 524 / 524;
+  return `${usedMB.toFixed(0)} MB`;
+}
+
+const startSesi = async () => {
+  console.clear();
+  console.log(chalk.bold.yellow(`\n  Status: Bot Connected\n`));
+  const store = makeInMemoryStore({
+    logger: require('pino')().child({ level: 'silent', stream: 'store' })
+  });
+  const { state, saveCreds } = await useMultiFileAuthState('./session');
+  const { version } = await fetchLatestBaileysVersion();
+  const connectionOptions = {
+    version,
+    keepAliveIntervalMs: 30000,
+    printQRInTerminal: !usePairingCode,
+    logger: pino({ level: "silent" }),
+    auth: state,
+    browser: ['Mac OS', 'Safari', '5.15.7'],
+    getMessage: async (key) => ({ conversation: 'Apophis' }),
+  };
+  sock = makeWASocket(connectionOptions);
+  sock.ev.on("messages.upsert", async (m) => {
+    try {
+      if (!m || !m.messages || !m.messages[0]) return;
+      const msg = m.messages[0];
+      const chatId = msg.key.remoteJid || "Tidak Diketahui";
+    } catch (error) {}
+  });
+  sock.ev.on('creds.update', saveCreds);
+  store.bind(sock.ev);
+  sock.ev.on('connection.update', (update) => {
+    const { connection, lastDisconnect } = update;
+    if (connection === 'open') {
+      if (lastPairingMessage) {
+        const connectedMenu = `
+<blockquote><pre>⬡═―—⊱ ⎧ xꜱᴛʀɪᴋᴇ ꜱʟᴀʏᴇʀ ⎭ ⊰―—═⬡</pre></blockquote>
+⌑ Number: ${lastPairingMessage.phoneNumber}
+⌑ Pairing Code: ${lastPairingMessage.pairingCode}
+⌑ Type: Connected
+╘—————————————————═⬡`;
+        try {
+          bot.telegram.editMessageCaption(
+            lastPairingMessage.chatId,
+            lastPairingMessage.messageId,
+            undefined,
+            connectedMenu,
+            { parse_mode: "HTML" }
+          );
+        } catch (e) {}
+      }
+      console.clear();
+      isWhatsAppConnected = true;
+      console.log(chalk.bold.yellow(`\n  Status: Connected\n`));
+    }
+    if (connection === 'close') {
+      const shouldReconnect =
+        lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+      if (shouldReconnect) startSesi();
+      isWhatsAppConnected = false;
+    }
+  });
+};
+
+// ─── MIDDLEWARE HELPERS ───────────────────────────────────────────────────────
+const checkWhatsAppConnection = (ctx, next) => {
+  if (!isWhatsAppConnected) {
+    ctx.reply("🪧 ☇ Tidak ada sender yang terhubung");
+    return;
+  }
+  next();
+};
+
+const checkCooldown = (ctx, next) => {
+  const userId = ctx.from.id;
+  const now = Date.now();
+  if (userCooldowns.has(userId)) {
+    const lastUsed = userCooldowns.get(userId);
+    const diff = (now - lastUsed) / 500;
+    if (diff < cooldown) {
+      const remaining = Math.ceil(cooldown - diff);
+      ctx.reply(`⏳ ☇ Harap menunggu ${remaining} detik`);
+      return;
+    }
+  }
+  userCooldowns.set(userId, now);
+  next();
+};
+
+const checkPremium = (ctx, next) => {
+  if (!isPremiumUser(ctx.from.id)) {
+    ctx.reply("❌ ☇ Akses hanya untuk premium");
+    return;
+  }
+  next();
+};
+
+// ─── GRUP PREMIUM ─────────────────────────────────────────────────────────────
+const PREM_GROUP_FILE = "./grup.json";
+
+function ensurePremGroupFile() {
+  if (!fs.existsSync(PREM_GROUP_FILE)) {
+    fs.writeFileSync(PREM_GROUP_FILE, JSON.stringify([], null, 2));
+  }
+}
+function loadPremGroups() {
+  ensurePremGroupFile();
+  try {
+    const raw = fs.readFileSync(PREM_GROUP_FILE, "utf8");
+    const data = JSON.parse(raw);
+    return Array.isArray(data) ? data.map(String) : [];
+  } catch {
+    fs.writeFileSync(PREM_GROUP_FILE, JSON.stringify([], null, 2));
+    return [];
+  }
+}
+function savePremGroups(groups) {
+  ensurePremGroupFile();
+  const unique = [...new Set(groups.map(String))];
+  fs.writeFileSync(PREM_GROUP_FILE, JSON.stringify(unique, null, 2));
+}
+function isPremGroup(chatId) {
+  return loadPremGroups().includes(String(chatId));
+}
+function addPremGroup(chatId) {
+  const groups = loadPremGroups();
+  const id = String(chatId);
+  if (groups.includes(id)) return false;
+  groups.push(id);
+  savePremGroups(groups);
+  return true;
+}
+function delPremGroup(chatId) {
+  const groups = loadPremGroups();
+  const id = String(chatId);
+  if (!groups.includes(id)) return false;
+  savePremGroups(groups.filter((x) => x !== id));
+  return true;
+}
+
+// ─── MIDDLEWARE: CEK GRUP PREMIUM ────────────────────────────────────────────
+const checkPremGroup = (ctx, next) => {
+  if (String(ctx.from.id) === String(ownerID)) return next();
+  if (ctx.chat.type === "private") {
+    ctx.reply("❌ ☇ Bot hanya bisa digunakan di grup yang sudah terdaftar sebagai GRUP PREMIUM.");
+    return;
+  }
+  if (!isPremGroup(ctx.chat.id)) {
+    ctx.reply("❌ ☇ Grup ini belum terdaftar sebagai GRUP PREMIUM.");
+    return;
+  }
+  return next();
+};
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── ADMIN ────────────────────────────────────────────────────────────────────
+const loadJSON = (file) => {
+  if (!fs.existsSync(file)) return [];
+  return JSON.parse(fs.readFileSync(file, 'utf8'));
+};
+const saveJSON = (file, data) => {
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  let adminUsers = loadJSON(adminFile);
+  const checkAdmin = (ctx, next) => {
+    if (!adminUsers.includes(ctx.from.id.toString())) {
+      return ctx.reply("❌ Anda bukan Admin.");
+    }
+    next();
+  };
+};
+const loadAdmins = () => {
+  try { return JSON.parse(fs.readFileSync(adminFile)); }
+  catch (err) { return {}; }
+};
+const saveAdmins = (admins) => {
+  try { fs.writeFileSync(adminFile, JSON.stringify(admins, null, 2)); }
+  catch (err) {}
+};
+const addAdmin = (userId) => {
+  const admins = loadAdmins();
+  admins[userId] = true;
+  saveAdmins(admins);
+  return true;
+};
+const removeAdmin = (userId) => {
+  const admins = loadAdmins();
+  delete admins[userId];
+  saveAdmins(admins);
+  return true;
+};
+const isAdmin = (userId) => {
+  const admins = loadAdmins();
+  return admins[userId] === true || userId == ownerID;
+};
+
+// ─── COMMANDS ─────────────────────────────────────────────────────────────────
+
+bot.command("addbot", async (ctx) => {
+  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
+  const args = ctx.message.text.split(" ")[1];
+  if (!args) return ctx.reply("🪧 ☇ Format: /addbot 62×××");
+  const phoneNumber = args.replace(/[^0-9]/g, "");
+  if (!phoneNumber) return ctx.reply("❌ ☇ Nomor tidak valid");
+  try {
+    if (!sock) return ctx.reply("❌ ☇ Socket belum siap, coba lagi nanti");
+    if (sock.authState.creds.registered) {
+      return ctx.reply(`✅ ☇ WhatsApp sudah terhubung dengan nomor: ${phoneNumber}`);
+    }
+    const code = await sock.requestPairingCode(phoneNumber, "XSTRIKES");
+    const formattedCode = code?.match(/.{1,4}/g)?.join("-") || code;
+    const pairingMenu = `\`\`\`
+⬡═―—⊱ ⎧ xꜱᴛʀɪᴋᴇ ꜱʟᴀʏᴇʀ ⎭ ⊰―—═⬡
+⌑ Number: ${phoneNumber}
+⌑ Pairing Code: ${formattedCode}
+⌑ Type: Not Connected
+╘═——————————————═⬡
+\`\`\``;
+    const sentMsg = await ctx.replyWithPhoto(thumbnailUrl, {
+      caption: pairingMenu,
+      parse_mode: "Markdown"
+    });
+    lastPairingMessage = {
+      chatId: ctx.chat.id,
+      messageId: sentMsg.message_id,
+      phoneNumber,
+      pairingCode: formattedCode
+    };
+  } catch (err) { console.error(err); }
+});
+
+if (sock) {
+  sock.ev.on("connection.update", async (update) => {
+    if (update.connection === "open" && lastPairingMessage) {
+      const updateConnectionMenu = `\`\`\`
+ ⬡═―—⊱ ⎧ xꜱᴛʀɪᴋᴇ ꜱʟᴀʏᴇʀ ⎭ ⊰―—═⬡
+⌑ Number: ${lastPairingMessage.phoneNumber}
+⌑ Pairing Code: ${lastPairingMessage.pairingCode}
+⌑ Type: Connected
+╘═——————————————═⬡\`\`\`
+`;
+      try {
+        await bot.telegram.editMessageCaption(
+          lastPairingMessage.chatId,
+          lastPairingMessage.messageId,
+          undefined,
+          updateConnectionMenu,
+          { parse_mode: "Markdown" }
+        );
+      } catch (e) {}
+    }
+  });
+}
+
+bot.command('addadmin', async (ctx) => {
+  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
+  const args = ctx.message.text.split(" ");
+  if (args.length < 2) return ctx.reply("🪧 ☇ Format: /addadmin 12345678");
+  addAdmin(args[1]);
+  ctx.reply(`✅ ☇ ${args[1]} berhasil ditambahkan sebagai admin`);
+});
+
+bot.command('deladmin', async (ctx) => {
+  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
+  const args = ctx.message.text.split(" ");
+  if (args.length < 2) return ctx.reply("🪧 ☇ Format: /deladmin 12345678");
+  if (args[1] == ownerID) return ctx.reply("❌ ☇ Tidak dapat menghapus pemilik utama");
+  removeAdmin(args[1]);
+  ctx.reply(`✅ ☇ ${args[1]} telah berhasil dihapus dari daftar admin`);
+});
+
+bot.command("addpremgrup", async (ctx) => {
+  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
+  const args = (ctx.message?.text || "").trim().split(/\s+/);
+  let groupId = String(ctx.chat.id);
+  if (ctx.chat.type === "private") {
+    if (args.length < 2) return ctx.reply("🪧 ☇ Format: /addpremgrup -1001234567890");
+    groupId = String(args[1]);
+  } else {
+    if (args.length >= 2) groupId = String(args[1]);
+  }
+  const ok = addPremGroup(groupId);
+  if (!ok) return ctx.reply(`🪧 ☇ Grup ${groupId} sudah terdaftar sebagai grup premium.`);
+  return ctx.reply(`✅ ☇ Grup ${groupId} berhasil ditambahkan ke daftar grup premium.`);
+});
+
+bot.command("delpremgrup", async (ctx) => {
+  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
+  const args = (ctx.message?.text || "").trim().split(/\s+/);
+  let groupId = String(ctx.chat.id);
+  if (ctx.chat.type === "private") {
+    if (args.length < 2) return ctx.reply("🪧 ☇ Format: /delpremgrup -1001234567890");
+    groupId = String(args[1]);
+  } else {
+    if (args.length >= 2) groupId = String(args[1]);
+  }
+  const ok = delPremGroup(groupId);
+  if (!ok) return ctx.reply(`🪧 ☇ Grup ${groupId} belum terdaftar sebagai grup premium.`);
+  return ctx.reply(`✅ ☇ Grup ${groupId} berhasil dihapus dari daftar grup premium.`);
+});
+
+// ─── ADDPREM — reply = button durasi berwarna, manual = id + hari ─────────────
+bot.command('addprem', async (ctx) => {
+  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
+
+  if (ctx.message.reply_to_message) {
+    const targetUser = ctx.message.reply_to_message.from;
+    const targetId = String(targetUser.id);
+    const targetName = targetUser.first_name || targetUser.username || targetId;
+
+    pendingAddPrem.set(ctx.from.id, { targetId, targetName });
+
+    return ctx.reply(
+      `👤 Target: <b>${targetName}</b> (<code>${targetId}</code>)\nPilih durasi premium:`,
+      {
+        parse_mode: "HTML",
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: "30 Hari", callback_data: `addprem_dur:30`, style: "Primary" },
+              { text: "90 Hari", callback_data: `addprem_dur:90`, style: "Success" },
+              { text: "120 Hari", callback_data: `addprem_dur:120`, style: "Danger" }
+            ]
+          ]
+        }
+      }
+    );
+  }
+
+  const args = ctx.message.text.split(" ");
+  if (args.length < 3) {
+    return ctx.reply(
+      "🪧 ☇ Format:\n• Reply pesan user → /addprem\n• Manual → /addprem 12345678 30"
+    );
+  }
+  const userId = args[1];
+  const duration = parseInt(args[2]);
+  if (isNaN(duration)) return ctx.reply("🪧 ☇ Durasi harus berupa angka dalam hari");
+  const expiryDate = addpremUser(userId, duration);
+  ctx.reply(`✅ ☇ ${userId} berhasil ditambahkan sebagai pengguna premium sampai ${expiryDate}`);
+});
+
+bot.action(/^addprem_dur:(\d+)$/, async (ctx) => {
+  if (String(ctx.from.id) !== String(ownerID)) {
+    return ctx.answerCbQuery("❌ Hanya pemilik yang bisa memilih durasi.", { show_alert: true });
+  }
+  const duration = parseInt(ctx.match[1]);
+  const pending = pendingAddPrem.get(ctx.from.id);
+  if (!pending) {
+    await ctx.answerCbQuery("⚠️ Session expired, ulangi /addprem.", { show_alert: true });
+    return ctx.editMessageText("⚠️ Session expired, ulangi /addprem.");
+  }
+  const { targetId, targetName } = pending;
+  pendingAddPrem.delete(ctx.from.id);
+  const expiryDate = addpremUser(targetId, duration);
+  await ctx.answerCbQuery(`✅ Premium ${duration} hari ditambahkan!`);
+  await ctx.editMessageText(
+    `✅ ☇ <b>${targetName}</b> (<code>${targetId}</code>) berhasil ditambahkan sebagai pengguna premium\n⌑ Durasi: <b>${duration} hari</b>\n⌑ Expire: <b>${expiryDate}</b>`,
+    { parse_mode: "HTML" }
+  );
+});
+
+bot.command('delprem', async (ctx) => {
+  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
+  let userId;
+  const args = ctx.message.text.split(" ");
+  if (ctx.message.reply_to_message) {
+    userId = ctx.message.reply_to_message.from.id.toString();
+  } else if (args.length < 2) {
+    return ctx.reply("🪧 ☇ Format: /delprem 12345678");
+  } else {
+    userId = args[1];
+  }
+  removePremiumUser(userId);
+  ctx.reply(`✅ ☇ ${userId} telah berhasil dihapus dari daftar pengguna premium`);
+});
+
+bot.command('addgcpremium', async (ctx) => {
+  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
+  const args = ctx.message.text.split(" ");
+  if (args.length < 3) return ctx.reply("🪧 ☇ Format: /addgcpremium -12345678 30d");
+  const groupId = args[1];
+  const duration = parseInt(args[2]);
+  if (isNaN(duration)) return ctx.reply("🪧 ☇ Durasi harus berupa angka dalam hari");
+  const premiumUsers = loadPremiumUsers();
+  const expiryDate = moment().add(duration, 'days').tz('Asia/Jakarta').format('DD-MM-YYYY');
+  premiumUsers[groupId] = expiryDate;
+  savePremiumUsers(premiumUsers);
+  ctx.reply(`✅ ☇ ${groupId} berhasil ditambahkan sebagai grub premium sampai ${expiryDate}`);
+});
+
+bot.command('delgcpremium', async (ctx) => {
+  if (ctx.from.id != ownerID) return ctx.reply("❌ ☇ Akses hanya untuk pemilik");
+  const args = ctx.message.text.split(" ");
+  if (args.length < 2) return ctx.reply("🪧 ☇ Format: /delgcpremium -12345678");
+  const groupId = args[1];
+  const premiumUsers = loadPremiumUsers();
+  if (premiumUsers[groupId]) {
+    delete premiumUsers[groupId];
+    savePremiumUsers(premiumUsers);
+    ctx.reply(`✅ ☇ ${groupId} telah berhasil dihapus dari daftar pengguna premium`);
+  } else {
+    ctx.reply(`🪧 ☇ ${groupId} tidak ada dalam daftar premium`);
+  }
+});
 
 bot.start(async (ctx) => {
   if (!tokenValidated)
     return ctx.reply("❌ *Token belum diverifikasi server.* Tunggu proses selesai.", { parse_mode: "Markdown" });
 
-  // Cek grup premium — owner bypass
-  if (ctx.from.id != ownerID && ctx.chat.type !== "private") {
+  if (String(ctx.from.id) !== String(ownerID)) {
+    if (ctx.chat.type === "private") {
+      bot.telegram.sendMessage(ownerID,
+        `📩 *NOTIFIKASI START PRIVATE*\n\n👤 User: ${ctx.from.first_name || ctx.from.username}\n🆔 ID: <code>${ctx.from.id}</code>\n🔗 Username: @${ctx.from.username || "-"}\n⌚ Waktu: ${new Date().toLocaleString("id-ID")}`,
+        { parse_mode: "HTML" }
+      );
+      return ctx.reply("❌ Bot ini hanya bisa digunakan di grup yang memiliki akses.");
+    }
     if (!isPremGroup(ctx.chat.id)) {
       return ctx.reply("❌ ☇ Grup ini belum terdaftar sebagai GRUP PREMIUM.");
     }
-  }
-
-  if (ctx.from.id != ownerID && ctx.chat.type === "private") {
-    bot.telegram.sendMessage(ownerID,
-      `📩 *NOTIFIKASI START PRIVATE*\n\n👤 User: ${ctx.from.first_name || ctx.from.username}\n🆔 ID: <code>${ctx.from.id}</code>\n🔗 Username: @${ctx.from.username || "-"}\n⌚ Waktu: ${new Date().toLocaleString("id-ID")}`,
-      { parse_mode: "HTML" }
-    );
-    return ctx.reply("❌ Bot ini hanya bisa digunakan di grup yang memiliki akses.");
   }
 
   const userId = ctx.from.id;
